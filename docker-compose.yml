@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # Moodle Web Application
+  moodle:
+    image: moodle:5.2
+    container_name: moodle-app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      MOODLE_DATABASE_TYPE: ${DB_TYPE:-mysql}
+      MOODLE_DATABASE_HOST: ${DB_HOST:-moodle-db}
+      MOODLE_DATABASE_NAME: ${DB_NAME:-moodle}
+      MOODLE_DATABASE_USER: ${DB_USER:-moodle}
+      MOODLE_DATABASE_PASSWORD: ${DB_PASSWORD:-moodle}
+      MOODLE_URL: ${MOODLE_URL:-http://localhost}
+      MOODLE_LANG: ${MOODLE_LANG:-en}
+    volumes:
+      - moodle_data:/var/www/moodle
+      - moodle_datadir:/var/moodledata
+      - ./config.php:/var/www/moodle/config.php:ro
+    depends_on:
+      - moodle-db
+    networks:
+      - moodle-network
+    restart: unless-stopped
+
+  # MySQL Database
+  moodle-db:
+    image: mysql:8.4
+    container_name: moodle-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${DB_NAME:-moodle}
+      MYSQL_USER: ${DB_USER:-moodle}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-moodle}
+    volumes:
+      - moodle_db_data:/var/lib/mysql
+      - ./mysql.cnf:/etc/mysql/conf.d/mysql.cnf:ro
+    ports:
+      - "3306:3306"
+    networks:
+      - moodle-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # Nginx Reverse Proxy (Optional)
+  nginx:
+    image: nginx:alpine
+    container_name: moodle-nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - moodle
+    networks:
+      - moodle-network
+    restart: unless-stopped
+
+volumes:
+  moodle_data:
+    driver: local
+  moodle_datadir:
+    driver: local
+  moodle_db_data:
+    driver: local
+
+networks:
+  moodle-network:
+    driver: bridge
